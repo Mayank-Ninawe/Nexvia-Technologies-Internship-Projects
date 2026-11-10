@@ -23,8 +23,6 @@ data/processed/*
 # ML artifacts
 ml/artifacts/*
 !ml/artifacts/
-!ml/artifacts/*.csv
-!ml/artifacts/*.json
 *.pkl
 *.joblib
 *.h5
