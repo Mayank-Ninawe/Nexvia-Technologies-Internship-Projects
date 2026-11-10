@@ -32,6 +32,7 @@ npm-debug.log*
 **/models/
 **/mlartifacts/
 **/artifacts/
+**/ml/artifacts/
 **/reports/
 **/monitoring_reports/
 **/*.pt
