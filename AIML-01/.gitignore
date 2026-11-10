@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+
+# Local data and generated artifacts
+data/raw/*
+data/processed/*
+data/reference/*
+models/*
+artifacts/*
+reports/*
+monitoring_reports/
+mlruns/
+mlartifacts/
+mlflow.db
+backend/feature_store/feature_repo/data/
+*.jsonl
+
+# Preserve directory placeholders
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/reference/.gitkeep
+!models/.gitkeep
+!artifacts/.gitkeep
+!reports/.gitkeep
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# IDE and operating system files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db

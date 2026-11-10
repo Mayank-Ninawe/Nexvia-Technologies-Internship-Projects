@@ -1,0 +1,62 @@
+# Configuration for the NIH ChestX-ray14 classification workflow.
+# This project is for educational purposes only, not for clinical use.
+
+dataset:
+  name: nih_chestxray14
+  raw_dir: data/raw/nih_chestxray14
+  metadata_file: data/raw/nih_chestxray14/Data_Entry_2017_v2020.csv
+  train_val_list: data/raw/nih_chestxray14/train_val_list.txt
+  test_list: data/raw/nih_chestxray14/test_list.txt
+  images_dir: data/raw/nih_chestxray14/extracted/images
+  manifest_file: data/manifests/nih_chestxray14_manifest.csv
+
+split:
+  # The official test list is reserved as the held-out test set.
+  # A patient-level validation split is created from the train/validation pool.
+  validation_fraction: 0.1
+  random_seed: 42
+  stratify_by: null
+
+labels:
+  # NIH provides 14 findings. Empty "No Finding" is retained as an explicit
+  # label policy and must not be silently converted into another class.
+  columns:
+    - Atelectasis
+    - Cardiomegaly
+    - Consolidation
+    - Edema
+    - Effusion
+    - Emphysema
+    - Fibrosis
+    - Hernia
+    - Infiltration
+    - Mass
+    - Nodule
+    - Pleural_Thickening
+    - Pneumonia
+    - Pneumothorax
+  positive_value: "1"
+  negative_value: "0"
+  uncertain_policy: treat_as_negative_and_document
+
+image:
+  input_channels: 1
+  resize_height: 224
+  resize_width: 224
+  normalize_mean: 0.5
+  normalize_std: 0.5
+
+training:
+  batch_size: 16
+  num_workers: 2
+  learning_rate: 0.0001
+  epochs: 2
+  mixed_precision: true
+  checkpoint_dir: models/classification
+  early_stopping_patience: 2
+
+limits:
+  # Phase 17 pilot must remain bounded; these values are intentionally small.
+  pilot_train_samples: 256
+  pilot_validation_samples: 64
+  pilot_test_samples: 64

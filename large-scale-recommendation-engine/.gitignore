@@ -1,0 +1,55 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+
+# Data files
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/reports/.gitkeep
+
+# ML artifacts
+ml/artifacts/*
+!ml/artifacts/
+!ml/artifacts/*.csv
+!ml/artifacts/*.json
+*.pkl
+*.joblib
+*.h5
+*.keras
+*.pt
+*.pth
+*.onnx
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local temporary backups and one-off scripts
+*~
+*.tmp
+*.temp
+backup-*/
+*.before-*

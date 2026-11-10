@@ -1,0 +1,37 @@
+# Configuration for the MSD Task09 Spleen segmentation pilot.
+# Educational use only, not for clinical use.
+
+dataset:
+  name: msd_task09_spleen
+  raw_dir: data/raw/msd_task09_spleen/extracted/Task09_Spleen
+  images_dir: data/raw/msd_task09_spleen/extracted/Task09_Spleen/imagesTr
+  labels_dir: data/raw/msd_task09_spleen/extracted/Task09_Spleen/labelsTr
+  test_images_dir: data/raw/msd_task09_spleen/extracted/Task09_Spleen/imagesTs
+
+split:
+  # The first 35 labelled volumes are training data; the final 6 are validation.
+  # This is a deterministic pilot split and is not the official MSD test set.
+  train_volume_count: 35
+  validation_volume_count: 6
+  random_seed: 42
+
+preprocessing:
+  target_orientation: RAS
+  target_spacing: [1.5, 1.5, 2.0]
+  intensity_a_min: -175.0
+  intensity_a_max: 250.0
+  intensity_b_min: 0.0
+  intensity_b_max: 1.0
+  roi_crop_source: image
+
+training:
+  batch_size: 1
+  num_workers: 2
+  learning_rate: 0.0001
+  epochs: 2
+  roi_size: [96, 96, 96]
+  mixed_precision: true
+
+limits:
+  pilot_training_volumes: 4
+  pilot_validation_volumes: 2

@@ -1,0 +1,22 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY ml ./ml
+COPY backend ./backend
+
+RUN python -m pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    torch==2.8.0+cpu torchvision==0.23.0+cpu \
+    && python -m pip install --no-cache-dir \
+    ".[backend]" \
+    "monai>=1.6,<2" \
+    "matplotlib>=3.9,<4" \
+    "numpy>=1.26,<3" \
+    "pyyaml>=6,<7" \
+    "scikit-learn>=1.5,<2"
+
+EXPOSE 8000
+
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]

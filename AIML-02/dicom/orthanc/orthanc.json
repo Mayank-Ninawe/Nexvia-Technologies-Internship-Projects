@@ -1,0 +1,14 @@
+{
+  "Name": "AI-Assisted-Medical-Imaging-Orthanc",
+  "DicomAet": "AI_MED_IMAGING",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "Users": {
+    "orthanc": "orthanc-dev-password"
+  },
+  "DicomModalities": {},
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db"
+}

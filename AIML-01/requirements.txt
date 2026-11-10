@@ -1,0 +1,24 @@
+# API and model-serving dependencies are shared with the API container.
+-r requirements-api.txt
+
+# Feature engineering, graph analysis, and evaluation
+matplotlib
+seaborn
+networkx
+
+# Experiment tracking, feature store, and drift monitoring
+mlflow
+evidently==0.7.23
+feast==0.66.0
+
+# Kafka and dashboard clients
+confluent-kafka
+requests
+streamlit
+
+# Notebook and validation tooling
+jupyter
+ipykernel
+httpx
+pytest
+ruff

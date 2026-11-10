@@ -1,0 +1,67 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      CLASSIFICATION_MODEL_PATH: /app/models/classification/best_classifier.pt
+      DATABASE_URL: sqlite:////app/runtime/app.db
+      MAX_UPLOAD_SIZE_MB: "50"
+      ORTHANC_URL: http://orthanc:8042
+      ORTHANC_USERNAME: orthanc
+      ORTHANC_PASSWORD: orthanc-dev-password
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - backend-runtime:/app/runtime
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      orthanc:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - --quiet
+        - http://localhost/
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  orthanc:
+    image: orthancteam/orthanc:latest
+    container_name: medical-imaging-orthanc
+    restart: unless-stopped
+    ports:
+      - "8042:8042"
+      - "4242:4242"
+    environment:
+      ORTHANC_NAME: "AI-Assisted-Medical-Imaging-Orthanc"
+      ORTHANC_USERNAME: "orthanc"
+      ORTHANC_PASSWORD: "orthanc-dev-password"
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+      - ./dicom/orthanc/orthanc.json:/etc/orthanc/orthanc.json:ro
+
+volumes:
+  backend-runtime:
+  orthanc-data:

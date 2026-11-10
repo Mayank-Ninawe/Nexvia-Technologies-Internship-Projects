@@ -1,0 +1,63 @@
+# Local environments and IDE files
+.git-history-*/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.idea/
+.vscode/
+
+# Local configuration and secrets
+.env
+.env.*
+!**/.env.example
+
+# Node dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+
+# Datasets, model weights, and generated artifacts
+**/data/raw/
+**/data/processed/
+**/data/interim/
+**/models/
+**/mlartifacts/
+**/artifacts/
+**/reports/
+**/monitoring_reports/
+**/*.pt
+**/*.pth
+**/*.ckpt
+**/*.onnx
+**/*.joblib
+**/*.pkl
+**/*.pickle
+**/*.parquet
+**/*.csv
+**/*.zip
+**/*.tar.gz
+
+# Local databases and runtime files
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/logs/
+**/tmp/
+
+# Project-local generated metadata
+**/*.egg-info/
+**/.dvc/cache/
+**/TEMP_IMPLEMENTATION_ROADMAP.md
+**/package.before-clean-install.json
+**/package-lock.before-clean-install.json
+**/package.before-upgrade.json
+**/package-lock.pre-upgrade.json

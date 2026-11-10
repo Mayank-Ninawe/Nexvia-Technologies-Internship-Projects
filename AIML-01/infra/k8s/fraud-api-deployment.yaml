@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-api
+  labels:
+    app: fraud-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fraud-api
+  template:
+    metadata:
+      labels:
+        app: fraud-api
+    spec:
+      containers:
+        - name: fraud-api
+          image: realtime-financial-fraud-detection-fraud-api:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fraud-api-secrets
+                  key: api-key
+            - name: CORS_ALLOWED_ORIGINS
+              value: "https://fraud.example.com"
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"

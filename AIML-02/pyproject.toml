@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-assisted-medical-imaging"
+version = "0.1.0"
+description = "Educational AI-assisted medical imaging internship project."
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28,<1",
+    "pytest>=8,<9",
+    "ruff>=0.11,<1",
+]
+backend = [
+    "fastapi>=0.115,<1",
+    "pillow>=11,<12",
+    "pydicom>=3,<4",
+    "requests>=2.32,<3",
+    "uvicorn>=0.32,<1",
+]
+ml = [
+    "matplotlib>=3.9,<4",
+    "monai>=1.6,<2",
+    "nibabel>=5.3,<6",
+    "numpy>=1.26,<3",
+    "pyyaml>=6,<7",
+    "scikit-learn>=1.5,<2",
+    "torch>=2.7,<3",
+    "torchvision>=0.22,<1",
+]
+
+[tool.setuptools]
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "backend/tests", "ml"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+markers = [
+    "real_model: requires a locally available trained classification checkpoint",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["ml/notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/segmentation/build_notebooks.py" = ["E501"]

@@ -1,0 +1,51 @@
+# Large datasets, derived artifacts, and model weights
+data/raw/
+data/processed/
+data/cache/
+data/manifests/*.csv
+data/manifests/*.parquet
+models/*.pt
+models/classification/*.jsonl
+reports/*.csv
+models/*.pth
+models/*.ckpt
+models/**/*.pt
+models/**/*.jsonl
+reports/
+models/**/*.pth
+models/**/*.ckpt
+
+# Compressed archives
+*.tar
+*.tar.gz
+*.zip
+
+# Local databases
+*.db
+*.sqlite3
+
+# Environment / Secrets
+.env
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# DVC local files
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
+reports/*.json
+data/manifests/*.csv
+
+# Frontend build and dependency artifacts
+frontend/node_modules/
+frontend/dist/

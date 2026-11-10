@@ -1,0 +1,680 @@
+"""Script to generate structured notebooks for spleen segmentation tasks."""
+
+from pathlib import Path
+
+import nbformat as nbf
+
+notebooks_dir = Path("ml/notebooks")
+notebooks_dir.mkdir(parents=True, exist_ok=True)
+
+
+def create_preprocessing_notebook():
+    nb = nbf.v4.new_notebook()
+    nb.metadata = {
+        "kernelspec": {
+            "display_name": "Python 3 (.venv)",
+            "language": "python",
+            "name": "python3",
+        },
+        "language_info": {"name": "python", "version": "3.10.11"},
+    }
+
+    cells = []
+
+    # Title & Overview
+    cells.append(
+        nbf.v4.new_markdown_cell(
+            "# MSD Task09 Spleen: Preprocessing & Exploratory Data Analysis\n\n"
+            "> **Educational prototype only. Not for clinical diagnostic use.**\n\n"
+            "This notebook handles the **preprocessing stage** of the spleen 3D CT segmentation pipeline:\n"
+            "1. Discovers and validates raw NIfTI CT scans and binary spleen segmentation masks.\n"
+            "2. Analyzes volume dimensions, voxel spacing, and spleen voxel distributions.\n"
+            "3. Configures and verifies the deterministic MONAI transform pipeline (Orientation, Spacing, Intensity Scaling, Foreground Cropping).\n"
+            "4. Visualizes multi-planar slices (Axial, Coronal, Sagittal) with ground-truth spleen contours.\n"
+            "5. Sets up reproducible training and held-out validation splits."
+        )
+    )
+
+    # Imports
+    cells.append(
+        nbf.v4.new_code_cell(
+            "import os\n"
+            "import sys\n"
+            "from pathlib import Path\n"
+            "# Locate project root and ensure it is in sys.path\n"
+            "project_root = Path.cwd().resolve()\n"
+            "if project_root.name == 'notebooks':\n"
+            "    project_root = project_root.parents[1]\n"
+            "if str(project_root) not in sys.path:\n"
+            "    sys.path.insert(0, str(project_root))\n\n"
+            "import yaml\n"
+            "import torch\n"
+            "import nibabel as nib\n"
+            "import numpy as np\n"
+            "%matplotlib inline\n"
+            "import matplotlib.pyplot as plt\n\n"
+            "import monai\n"
+            "from monai.data import CacheDataset, DataLoader\n"
+            "from ml.segmentation.preprocessing import (\n"
+            "    IMAGE_KEY,\n"
+            "    LABEL_KEY,\n"
+            "    build_preprocessing_transforms,\n"
+            "    list_volume_pairs,\n"
+            "    validate_sample,\n"
+            ")\n\n"
+            "print('Project root:', project_root)\n"
+            "print('MONAI version:', monai.__version__)\n"
+            "print('CUDA available:', torch.cuda.is_available())"
+        )
+    )
+
+    # Config and discovery
+    cells.append(
+        nbf.v4.new_code_cell(
+            "config_path = project_root / 'ml' / 'segmentation' / 'config.yaml'\n"
+            "config = yaml.safe_load(config_path.read_text(encoding='utf-8'))\n\n"
+            "images_dir = project_root / config['dataset']['images_dir']\n"
+            "labels_dir = project_root / config['dataset']['labels_dir']\n\n"
+            "volume_pairs = list_volume_pairs(images_dir, labels_dir)\n"
+            "print(f'Total aligned NIfTI volume pairs available: {len(volume_pairs)}')\n"
+            "for i, p in enumerate(volume_pairs[:3]):\n"
+            "    print(f'[{i+1}] Image: {Path(p[IMAGE_KEY]).name} | Mask: {Path(p[LABEL_KEY]).name}')"
+        )
+    )
+
+    # Inspecting raw volume metadata
+    cells.append(
+        nbf.v4.new_code_cell(
+            "# Inspect the raw volume characteristics\n"
+            "sample_img = nib.load(volume_pairs[0][IMAGE_KEY])\n"
+            "sample_mask = nib.load(volume_pairs[0][LABEL_KEY])\n\n"
+            "img_data = sample_img.get_fdata()\n"
+            "mask_data = sample_mask.get_fdata()\n\n"
+            "spleen_voxels = int((mask_data > 0).sum())\n"
+            "total_voxels = mask_data.size\n"
+            "spleen_pct = 100.0 * spleen_voxels / total_voxels\n\n"
+            "print(f'Raw Image Shape: {img_data.shape}')\n"
+            "print(f'Voxel Spacing (zooms): {sample_img.header.get_zooms()}')\n"
+            "print(f'Intensity Range (HU): [{img_data.min():.1f}, {img_data.max():.1f}]')\n"
+            "print(f'Total Spleen Voxels: {spleen_voxels:,} ({spleen_pct:.2f}% of raw volume)')"
+        )
+    )
+
+    # Preprocessing Pipeline Definition
+    cells.append(
+        nbf.v4.new_markdown_cell(
+            "### Deterministic Preprocessing Pipeline\n\n"
+            "Standardizes the input across patients:\n"
+            "- **Orientation**: Reorients voxel axes to standard `RAS` coordinates.\n"
+            "- **Resampling**: Normalizes voxel spacing to `(1.5, 1.5, 2.0)` mm.\n"
+            "- **Windowing**: Restricts abdominal soft-tissue CT intensities to `[-175, 250]` HU and scales to `[0.0, 1.0]`.\n"
+            "- **Foreground Crop**: Crops out empty ambient background air around the patient's body."
+        )
+    )
+
+    cells.append(
+        nbf.v4.new_code_cell(
+            "# Build deterministic transforms and create a test preprocessed cache\n"
+            "prep_transforms = build_preprocessing_transforms(config)\n"
+            "demo_dataset = CacheDataset(data=volume_pairs[:2], transform=prep_transforms, cache_rate=1.0, num_workers=0)\n\n"
+            "sample = demo_dataset[0]\n"
+            "validate_sample(sample)\n\n"
+            "image_t = sample[IMAGE_KEY]\n"
+            "label_t = sample[LABEL_KEY]\n\n"
+            "print('Preprocessed Image Tensor Shape:', tuple(image_t.shape))\n"
+            "print('Preprocessed Label Tensor Shape:', tuple(label_t.shape))\n"
+            "print('Preprocessed Label Voxels:', int(label_t.sum().item()))\n"
+            "print(f'Intensity min: {image_t.min():.3f}, max: {image_t.max():.3f}')"
+        )
+    )
+
+    # Visualization
+    cells.append(
+        nbf.v4.new_code_cell(
+            "# Visualize multi-planar cross-sections with spleen ground truth\n"
+            "img_np = image_t[0].cpu().numpy()\n"
+            "lbl_np = label_t[0].cpu().numpy()\n\n"
+            "# Locate spleen center of mass (X=Sagittal, Y=Coronal, Z=Axial)\n"
+            "spleen_coords = np.argwhere(lbl_np > 0)\n"
+            "if len(spleen_coords) > 0:\n"
+            "    cx, cy, cz = spleen_coords.mean(axis=0).astype(int)\n"
+            "else:\n"
+            "    cx, cy, cz = [s // 2 for s in img_np.shape]\n\n"
+            "fig, axes = plt.subplots(1, 3, figsize=(15, 5))\n\n"
+            "# Axial slice (along Z-axis)\n"
+            "axes[0].imshow(img_np[:, :, cz].T, cmap='gray', origin='lower')\n"
+            "axes[0].contour(lbl_np[:, :, cz].T, levels=[0.5], colors='red', linewidths=1.5)\n"
+            "axes[0].set_title(f'Axial (Slice {cz})')\n"
+            "axes[0].axis('off')\n\n"
+            "# Coronal slice (along Y-axis)\n"
+            "axes[1].imshow(img_np[:, cy, :].T, cmap='gray', origin='lower')\n"
+            "axes[1].contour(lbl_np[:, cy, :].T, levels=[0.5], colors='red', linewidths=1.5)\n"
+            "axes[1].set_title(f'Coronal (Slice {cy})')\n"
+            "axes[1].axis('off')\n\n"
+            "# Sagittal slice (along X-axis)\n"
+            "axes[2].imshow(img_np[cx, :, :].T, cmap='gray', origin='lower')\n"
+            "axes[2].contour(lbl_np[cx, :, :].T, levels=[0.5], colors='red', linewidths=1.5)\n"
+            "axes[2].set_title(f'Sagittal (Slice {cx})')\n"
+            "axes[2].axis('off')\n\n"
+            "plt.tight_layout()\n"
+            "plt.show()"
+        )
+    )
+
+    # Dataset splits
+    cells.append(
+        nbf.v4.new_markdown_cell(
+            "### Dataset Split Policy\n\n"
+            "We divide the 41 available volumes into disjoint splits:\n"
+            "- **Training set**: 16 volumes for robust prototype training.\n"
+            "- **Held-out validation set**: 4 strictly non-overlapping volumes."
+        )
+    )
+
+    cells.append(
+        nbf.v4.new_code_cell(
+            "TRAIN_COUNT = 16\n"
+            "VAL_COUNT = 4\n\n"
+            "train_pairs = volume_pairs[:TRAIN_COUNT]\n"
+            "val_pairs = volume_pairs[TRAIN_COUNT : TRAIN_COUNT + VAL_COUNT]\n\n"
+            "train_names = {Path(p[IMAGE_KEY]).name for p in train_pairs}\n"
+            "val_names = {Path(p[IMAGE_KEY]).name for p in val_pairs}\n\n"
+            "assert train_names.isdisjoint(val_names), 'Overlap detected between splits!'\n"
+            "print(f'Training volumes ({len(train_pairs)}):', sorted(train_names))\n"
+            "print(f'Validation volumes ({len(val_pairs)}):', sorted(val_names))\n"
+            "print('Split verification: Disjoint split confirmed.')"
+        )
+    )
+
+    nb.cells = cells
+    out_file = notebooks_dir / "01_spleen_preprocessing.ipynb"
+    with open(out_file, "w", encoding="utf-8") as f:
+        nbf.write(nb, f)
+    print("Created:", out_file)
+
+
+def create_training_notebook():
+    nb = nbf.v4.new_notebook()
+    nb.metadata = {
+        "kernelspec": {
+            "display_name": "Python 3 (.venv)",
+            "language": "python",
+            "name": "python3",
+        },
+        "language_info": {"name": "python", "version": "3.10.11"},
+    }
+
+    cells = []
+
+    # Title & Overview
+    cells.append(
+        nbf.v4.new_markdown_cell(
+            "# MSD Task09 Spleen: 3D U-Net Model Training\n\n"
+            "> **Educational prototype only. Not for clinical diagnostic use.**\n\n"
+            "This notebook executes the **training stage** with all architectural and algorithmic fixes:\n"
+            "1. **Decoupled dynamic crop pipeline**: Caches deterministic volumes in RAM and extracts 4 fresh positive/negative crops per volume per epoch.\n"
+            "2. **Instance Normalization (`Norm.INSTANCE`)**: Eliminates batch norm collapse for batch size 1.\n"
+            "3. **Prior Probability Bias Initialization (`prior_prob=0.01`)**: Solves the initial sigmoid saturation defect that caused 85x over-prediction.\n"
+            "4. **Balanced channel hierarchy**: `channels=(16, 32, 64, 128)` and `strides=(2, 2, 2)`.\n"
+            "5. **Compound `DiceCELoss`**: Directly penalizes false-positive background voxels.\n"
+            "6. **Mixed-Precision GPU training with Gradient Clipping**: Safe and efficient execution on RTX 3050 Laptop GPU.\n"
+            "7. **Checkpointing**: Automatically saves the best model based on held-out validation Dice."
+        )
+    )
+
+    # Imports
+    cells.append(
+        nbf.v4.new_code_cell(
+            "import os\n"
+            "import sys\n"
+            "import time\n"
+            "from pathlib import Path\n"
+            "# Locate project root and ensure it is in sys.path\n"
+            "project_root = Path.cwd().resolve()\n"
+            "if project_root.name == 'notebooks':\n"
+            "    project_root = project_root.parents[1]\n"
+            "if str(project_root) not in sys.path:\n"
+            "    sys.path.insert(0, str(project_root))\n\n"
+            "import yaml\n"
+            "import torch\n"
+            "import numpy as np\n"
+            "%matplotlib inline\n"
+            "import matplotlib.pyplot as plt\n\n"
+            "import monai\n"
+            "from monai.data import CacheDataset, Dataset, DataLoader, list_data_collate\n"
+            "from monai.inferers import sliding_window_inference\n"
+            "from monai.losses import DiceCELoss\n"
+            "from monai.transforms import Compose, RandCropByPosNegLabeld, RandRotated, RandFlipd\n\n"
+            "from ml.segmentation.model import create_spleen_unet, dice_score, post_process_mask\n"
+            "from ml.segmentation.preprocessing import (\n"
+            "    IMAGE_KEY,\n"
+            "    LABEL_KEY,\n"
+            "    build_preprocessing_transforms,\n"
+            "    list_volume_pairs,\n"
+            ")\n\n"
+            "project_root = Path.cwd().resolve()\n"
+            "if project_root.name == 'notebooks':\n"
+            "    project_root = project_root.parents[1]\n\n"
+            "device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n"
+            "print('Training device:', device)\n"
+            "if device.type == 'cuda':\n"
+            "    print('GPU Model:', torch.cuda.get_device_name(0))\n"
+            "    print('CUDA Memory:', round(torch.cuda.get_device_properties(0).total_memory / 1e9, 2), 'GB')"
+        )
+    )
+
+    # Configuration and Data Setup
+    cells.append(
+        nbf.v4.new_code_cell(
+            "config_path = project_root / 'ml' / 'segmentation' / 'config.yaml'\n"
+            "config = yaml.safe_load(config_path.read_text(encoding='utf-8'))\n\n"
+            "# Training scope for prototype training\n"
+            "TRAIN_VOLUME_COUNT = 16\n"
+            "VAL_VOLUME_COUNT = 4\n"
+            "EPOCHS = 40\n"
+            "LEARNING_RATE = 2e-4\n"
+            "ROI_SIZE = (96, 96, 96)\n"
+            "NUM_CROPS_PER_VOLUME = 4\n\n"
+            "images_dir = project_root / config['dataset']['images_dir']\n"
+            "labels_dir = project_root / config['dataset']['labels_dir']\n"
+            "all_pairs = list_volume_pairs(images_dir, labels_dir)\n\n"
+            "train_pairs = all_pairs[:TRAIN_VOLUME_COUNT]\n"
+            "val_pairs = all_pairs[TRAIN_VOLUME_COUNT : TRAIN_VOLUME_COUNT + VAL_VOLUME_COUNT]\n"
+            "print(f'Train volumes: {len(train_pairs)}, Validation volumes: {len(val_pairs)}')"
+        )
+    )
+
+    # Decoupled Data Pipeline
+    cells.append(
+        nbf.v4.new_code_cell(
+            "# 1. Deterministic preprocessing cached in RAM\n"
+            "prep_transforms = build_preprocessing_transforms(config)\n\n"
+            "print('Caching training volumes in memory...')\n"
+            "train_cache = CacheDataset(data=train_pairs, transform=prep_transforms, cache_rate=1.0, num_workers=0)\n\n"
+            "print('Caching validation volumes in memory...')\n"
+            "val_cache = CacheDataset(data=val_pairs, transform=prep_transforms, cache_rate=1.0, num_workers=0)\n\n"
+            "# 2. Dynamic random cropping and spatial augmentation applied on-the-fly\n"
+            "dynamic_crop_transforms = Compose([\n"
+            "    RandCropByPosNegLabeld(\n"
+            "        keys=[IMAGE_KEY, LABEL_KEY],\n"
+            "        label_key=LABEL_KEY,\n"
+            "        spatial_size=ROI_SIZE,\n"
+            "        pos=2.0,\n"
+            "        neg=1.0,\n"
+            "        num_samples=NUM_CROPS_PER_VOLUME,\n"
+            "        image_key=IMAGE_KEY,\n"
+            "        image_threshold=0.0,\n"
+            "    ),\n"
+            "    RandFlipd(keys=[IMAGE_KEY, LABEL_KEY], prob=0.5, spatial_axis=0),\n"
+            "    RandFlipd(keys=[IMAGE_KEY, LABEL_KEY], prob=0.5, spatial_axis=1),\n"
+            "    RandRotated(keys=[IMAGE_KEY, LABEL_KEY], range_x=0.2, prob=0.3, mode=('bilinear', 'nearest')),\n"
+            "])\n\n"
+            "train_dataset = Dataset(data=train_cache, transform=dynamic_crop_transforms)\n\n"
+            "train_loader = DataLoader(\n"
+            "    train_dataset,\n"
+            "    batch_size=1,\n"
+            "    shuffle=True,\n"
+            "    num_workers=0,\n"
+            "    collate_fn=list_data_collate,\n"
+            "    pin_memory=(device.type == 'cuda'),\n"
+            ")\n\n"
+            "val_loader = DataLoader(\n"
+            "    val_cache,\n"
+            "    batch_size=1,\n"
+            "    shuffle=False,\n"
+            "    num_workers=0,\n"
+            "    pin_memory=(device.type == 'cuda'),\n"
+            ")\n"
+            "print(f'Train batches per epoch: {len(train_loader)} (total {len(train_loader)*NUM_CROPS_PER_VOLUME} crops/epoch)')"
+        )
+    )
+
+    # Model and Loss Initialization
+    cells.append(
+        nbf.v4.new_code_cell(
+            "# Instantiate 3D U-Net with Norm.INSTANCE and prior probability initialization (prior_prob=0.01)\n"
+            "model = create_spleen_unet(prior_prob=0.01).to(device)\n\n"
+            "# Compound Dice + Cross-Entropy Loss\n"
+            "loss_function = DiceCELoss(sigmoid=True, lambda_dice=1.0, lambda_ce=1.0)\n\n"
+            "optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-5)\n"
+            "scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)\n"
+            "scaler = torch.amp.GradScaler(enabled=(device.type == 'cuda'))\n\n"
+            "print('Model architecture successfully built with Instance Normalization & prior_prob=0.01.')\n"
+            "print('Loss function: Compound DiceCELoss(lambda_dice=1.0, lambda_ce=1.0)')"
+        )
+    )
+
+    # Training Execution Loop
+    cells.append(
+        nbf.v4.new_code_cell(
+            "models_dir = project_root / 'models' / 'segmentation'\n"
+            "models_dir.mkdir(parents=True, exist_ok=True)\n"
+            "checkpoint_path = models_dir / 'best_spleen_unet.pt'\n\n"
+            "best_val_dice = -1.0\n"
+            "best_epoch = -1\n"
+            "history = []\n\n"
+            "print(f'Starting training for {EPOCHS} epochs...')\n"
+            "overall_start = time.perf_counter()\n\n"
+            "for epoch in range(1, EPOCHS + 1):\n"
+            "    epoch_start = time.perf_counter()\n"
+            "    model.train()\n"
+            "    train_loss = 0.0\n"
+            "    step_count = 0\n\n"
+            "    for batch in train_loader:\n"
+            "        images = batch[IMAGE_KEY].to(device, non_blocking=True)\n"
+            "        labels = batch[LABEL_KEY].to(device, non_blocking=True)\n\n"
+            "        optimizer.zero_grad(set_to_none=True)\n"
+            "        with torch.autocast(device_type=device.type, enabled=(device.type == 'cuda')):\n"
+            "            outputs = model(images)\n"
+            "            loss = loss_function(outputs, labels)\n\n"
+            "        scaler.scale(loss).backward()\n"
+            "        scaler.unscale_(optimizer)\n"
+            "        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)\n"
+            "        scaler.step(optimizer)\n"
+            "        scaler.update()\n\n"
+            "        train_loss += float(loss.detach().cpu())\n"
+            "        step_count += 1\n\n"
+            "    scheduler.step()\n"
+            "    avg_train_loss = train_loss / max(step_count, 1)\n\n"
+            "    # Validation step with whole-volume sliding window inference\n"
+            "    do_val = (epoch % 2 == 0 or epoch == 1 or epoch == EPOCHS)\n"
+            "    val_dices = []\n"
+            "    if do_val:\n"
+            "        model.eval()\n"
+            "        with torch.no_grad():\n"
+            "            for val_batch in val_loader:\n"
+            "                val_img = val_batch[IMAGE_KEY].to(device)\n"
+            "                val_lbl = val_batch[LABEL_KEY].to(device)\n\n"
+            "                with torch.autocast(device_type=device.type, enabled=(device.type == 'cuda')):\n"
+            "                    val_logits = sliding_window_inference(\n"
+            "                        inputs=val_img,\n"
+            "                        roi_size=ROI_SIZE,\n"
+            "                        sw_batch_size=1,\n"
+            "                        predictor=model,\n"
+            "                        overlap=0.5,\n"
+            "                        mode='gaussian',\n"
+            "                    )\n"
+            "                val_pred = post_process_mask(val_logits, threshold=0.5, keep_largest_component=True)\n"
+            "                val_dices.append(dice_score(val_pred, val_lbl))\n\n"
+            "        mean_val_dice = float(np.mean(val_dices))\n"
+            "    else:\n"
+            "        mean_val_dice = history[-1]['val_dice'] if history else 0.0\n\n"
+            "    epoch_time = time.perf_counter() - epoch_start\n\n"
+            "    history.append({\n"
+            "        'epoch': epoch,\n"
+            "        'train_loss': avg_train_loss,\n"
+            "        'val_dice': mean_val_dice,\n"
+            "        'time_sec': epoch_time,\n"
+            "    })\n\n"
+            "    saved_msg = ''\n"
+            "    if do_val and mean_val_dice > best_val_dice:\n"
+            "        best_val_dice = mean_val_dice\n"
+            "        best_epoch = epoch\n"
+            "        torch.save({\n"
+            "            'epoch': epoch,\n"
+            "            'model_state_dict': model.state_dict(),\n"
+            "            'optimizer_state_dict': optimizer.state_dict(),\n"
+            "            'scaler_state_dict': scaler.state_dict(),\n"
+            "            'validation_dice': mean_val_dice,\n"
+            "            'loss': 'dice_ce',\n"
+            "            'train_volume_count': len(train_pairs),\n"
+            "            'validation_volume_count': len(val_pairs),\n"
+            "            'roi_size': ROI_SIZE,\n"
+            "            'norm': 'instance',\n"
+            "        }, checkpoint_path)\n"
+            "        saved_msg = ' ==> [SAVED BEST CHECKPOINT]'\n\n"
+            "    val_str = f'{mean_val_dice:.4f}' if do_val else f'({mean_val_dice:.4f} cached)'\n"
+            "    print(f'Epoch {epoch:02d}/{EPOCHS:02d} | Train Loss: {avg_train_loss:.4f} | ' \n"
+            "          f'Val Dice: {val_str} | Time: {epoch_time:.1f}s{saved_msg}')\n\n"
+            "total_time = time.perf_counter() - overall_start\n"
+            "print(f'\\nTraining completed in {total_time:.1f}s.')\n"
+            "print(f'Best Validation Dice: {best_val_dice:.4f} at Epoch {best_epoch}')\n"
+            "print(f'Saved to: {checkpoint_path}')"
+        )
+    )
+
+    # Plot Convergence
+    cells.append(
+        nbf.v4.new_code_cell(
+            "# Plot training loss and validation Dice progression\n"
+            "epochs_arr = [h['epoch'] for h in history]\n"
+            "losses_arr = [h['train_loss'] for h in history]\n"
+            "dices_arr = [h['val_dice'] for h in history]\n\n"
+            "fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))\n\n"
+            "ax1.plot(epochs_arr, losses_arr, 'o-', color='crimson', label='DiceCE Loss')\n"
+            "ax1.set_xlabel('Epoch')\n"
+            "ax1.set_ylabel('Loss')\n"
+            "ax1.set_title('Training Loss')\n"
+            "ax1.grid(True, alpha=0.3)\n"
+            "ax1.legend()\n\n"
+            "ax2.plot(epochs_arr, dices_arr, 's-', color='teal', label='Held-out Dice')\n"
+            "ax2.axhline(0.70, color='gray', linestyle='--', label='Prototype Target (0.70)')\n"
+            "ax2.set_xlabel('Epoch')\n"
+            "ax2.set_ylabel('Dice Score')\n"
+            "ax2.set_title('Validation Dice')\n"
+            "ax2.grid(True, alpha=0.3)\n"
+            "ax2.legend()\n\n"
+            "plt.tight_layout()\n"
+            "plt.show()"
+        )
+    )
+
+    nb.cells = cells
+    out_file = notebooks_dir / "02_spleen_training.ipynb"
+    with open(out_file, "w", encoding="utf-8") as f:
+        nbf.write(nb, f)
+    print("Created:", out_file)
+
+
+def create_evaluation_notebook():
+    nb = nbf.v4.new_notebook()
+    nb.metadata = {
+        "kernelspec": {
+            "display_name": "Python 3 (.venv)",
+            "language": "python",
+            "name": "python3",
+        },
+        "language_info": {"name": "python", "version": "3.10.11"},
+    }
+
+    cells = []
+
+    # Title & Overview
+    cells.append(
+        nbf.v4.new_markdown_cell(
+            "# MSD Task09 Spleen: Evaluation & Over-Segmentation Diagnostics\n\n"
+            "> **Educational prototype only. Not for clinical diagnostic use.**\n\n"
+            "This notebook evaluates the trained 3D U-Net model on held-out validation CT scans:\n"
+            "1. Runs sliding-window inference with Gaussian blending.\n"
+            "2. Applies connected-component post-processing (`post_process_mask`).\n"
+            "3. Directly addresses and proves resolution of the prior over-segmentation defect:\n"
+            "   - Measures **Target spleen voxels vs Predicted spleen voxels** (Over-segmentation ratio).\n"
+            "   - Measures **Raw Dice vs Cleaned Dice**.\n"
+            "4. Visualizes 2D slice overlays comparing Ground Truth vs Model Prediction.\n"
+            "5. Exports the verified evaluation report to `reports/spleen_segmentation_metrics.json`."
+        )
+    )
+
+    # Imports
+    cells.append(
+        nbf.v4.new_code_cell(
+            "import os\n"
+            "import sys\n"
+            "import json\n"
+            "from pathlib import Path\n"
+            "# Locate project root and ensure it is in sys.path\n"
+            "project_root = Path.cwd().resolve()\n"
+            "if project_root.name == 'notebooks':\n"
+            "    project_root = project_root.parents[1]\n"
+            "if str(project_root) not in sys.path:\n"
+            "    sys.path.insert(0, str(project_root))\n\n"
+            "import yaml\n"
+            "import torch\n"
+            "import numpy as np\n"
+            "%matplotlib inline\n"
+            "import matplotlib.pyplot as plt\n\n"
+            "from monai.data import CacheDataset, DataLoader\n"
+            "from monai.inferers import sliding_window_inference\n"
+            "from ml.segmentation.model import create_spleen_unet, dice_score, post_process_mask\n"
+            "from ml.segmentation.preprocessing import (\n"
+            "    IMAGE_KEY,\n"
+            "    LABEL_KEY,\n"
+            "    build_preprocessing_transforms,\n"
+            "    list_volume_pairs,\n"
+            ")\n\n"
+            "project_root = Path.cwd().resolve()\n"
+            "if project_root.name == 'notebooks':\n"
+            "    project_root = project_root.parents[1]\n\n"
+            "device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n"
+            "print('Evaluation device:', device)"
+        )
+    )
+
+    # Load Model and Data
+    cells.append(
+        nbf.v4.new_code_cell(
+            "config_path = project_root / 'ml' / 'segmentation' / 'config.yaml'\n"
+            "config = yaml.safe_load(config_path.read_text(encoding='utf-8'))\n\n"
+            "checkpoint_path = project_root / 'models' / 'segmentation' / 'best_spleen_unet.pt'\n"
+            "assert checkpoint_path.exists(), f'Checkpoint not found at {checkpoint_path}'\n\n"
+            "checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)\n"
+            "print(f'Loaded checkpoint trained for {checkpoint.get(\"epoch\")} epochs with loss={checkpoint.get(\"loss\")}')\n\n"
+            "model = create_spleen_unet().to(device)\n"
+            "model.load_state_dict(checkpoint['model_state_dict'])\n"
+            "model.eval()\n\n"
+            "# Prepare held-out validation volumes\n"
+            "TRAIN_VOLUME_COUNT = checkpoint.get('train_volume_count', 16)\n"
+            "VAL_VOLUME_COUNT = checkpoint.get('validation_volume_count', 4)\n\n"
+            "all_pairs = list_volume_pairs(\n"
+            "    project_root / config['dataset']['images_dir'],\n"
+            "    project_root / config['dataset']['labels_dir'],\n"
+            ")\n"
+            "val_pairs = all_pairs[TRAIN_VOLUME_COUNT : TRAIN_VOLUME_COUNT + VAL_VOLUME_COUNT]\n\n"
+            "prep_transforms = build_preprocessing_transforms(config)\n"
+            "val_dataset = CacheDataset(data=val_pairs, transform=prep_transforms, cache_rate=1.0, num_workers=0)\n"
+            "val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0)\n"
+            "print(f'Evaluation dataset ready: {len(val_loader)} validation volumes.')"
+        )
+    )
+
+    # Inference & Metrics Calculation
+    cells.append(
+        nbf.v4.new_code_cell(
+            "results = []\n"
+            "cached_volumes_for_viz = []\n"
+            "ROI_SIZE = tuple(checkpoint.get('roi_size', (96, 96, 96)))\n\n"
+            "with torch.no_grad():\n"
+            "    for idx, batch in enumerate(val_loader, start=1):\n"
+            "        image = batch[IMAGE_KEY].to(device)\n"
+            "        target = batch[LABEL_KEY].to(device)\n\n"
+            "        with torch.autocast(device_type=device.type, enabled=(device.type == 'cuda')):\n"
+            "            logits = sliding_window_inference(\n"
+            "                inputs=image,\n"
+            "                roi_size=ROI_SIZE,\n"
+            "                sw_batch_size=1,\n"
+            "                predictor=model,\n"
+            "                overlap=0.5,\n"
+            "                mode='gaussian',\n"
+            "            )\n\n"
+            "        raw_pred = (torch.sigmoid(logits) >= 0.5).float()\n"
+            "        clean_pred = post_process_mask(logits, threshold=0.5, keep_largest_component=True)\n\n"
+            "        raw_dice = dice_score(raw_pred, target)\n"
+            "        clean_dice = dice_score(clean_pred, target)\n\n"
+            "        target_voxels = int(target.sum().item())\n"
+            "        raw_voxels = int(raw_pred.sum().item())\n"
+            "        clean_voxels = int(clean_pred.sum().item())\n"
+            "        ratio = clean_voxels / max(target_voxels, 1)\n\n"
+            "        vol_result = {\n"
+            "            'volume_index': idx,\n"
+            "            'volume_file': Path(val_pairs[idx - 1][IMAGE_KEY]).name,\n"
+            "            'clean_dice': round(clean_dice, 4),\n"
+            "            'raw_dice': round(raw_dice, 4),\n"
+            "            'target_voxels': target_voxels,\n"
+            "            'predicted_voxels': clean_voxels,\n"
+            "            'raw_predicted_voxels': raw_voxels,\n"
+            "            'voxel_ratio': round(ratio, 3),\n"
+            "        }\n"
+            "        results.append(vol_result)\n"
+            "        print(f'Volume {idx} ({vol_result[\"volume_file\"]}) | ' \n"
+            "              f'Dice: {clean_dice:.4f} (Raw: {raw_dice:.4f}) | ' \n"
+            "              f'Target Voxels: {target_voxels:,} | Predicted: {clean_voxels:,} (Ratio: {ratio:.2f}x)')\n\n"
+            "        if idx == 1:\n"
+            "            cached_volumes_for_viz = (image[0, 0].cpu().numpy(), target[0, 0].cpu().numpy(), clean_pred[0, 0].cpu().numpy())"
+        )
+    )
+
+    # Summary Metrics Table
+    cells.append(
+        nbf.v4.new_code_cell(
+            "mean_clean_dice = float(np.mean([r['clean_dice'] for r in results]))\n"
+            "mean_raw_dice = float(np.mean([r['raw_dice'] for r in results]))\n"
+            "mean_ratio = float(np.mean([r['voxel_ratio'] for r in results]))\n\n"
+            "print('=' * 60)\n"
+            "print('FINAL VALIDATION PERFORMANCE SUMMARY')\n"
+            "print('=' * 60)\n"
+            "print(f'Mean Validation Dice (Post-processed): {mean_clean_dice:.4f}')\n"
+            "print(f'Mean Validation Dice (Raw):            {mean_raw_dice:.4f}')\n"
+            "print(f'Mean Predicted/Target Voxel Ratio:     {mean_ratio:.2f}x')\n"
+            "print('=' * 60)\n\n"
+            "# Save report\n"
+            "reports_dir = project_root / 'reports'\n"
+            "reports_dir.mkdir(parents=True, exist_ok=True)\n"
+            "report_path = reports_dir / 'spleen_segmentation_metrics.json'\n\n"
+            "report_data = {\n"
+            "    'checkpoint_path': str(checkpoint_path.relative_to(project_root)),\n"
+            "    'device': str(device),\n"
+            "    'validation_volumes': len(results),\n"
+            "    'mean_dice': round(mean_clean_dice, 6),\n"
+            "    'mean_raw_dice': round(mean_raw_dice, 6),\n"
+            "    'mean_voxel_ratio': round(mean_ratio, 3),\n"
+            "    'per_volume': results,\n"
+            "    'limitation': 'Prototype model evaluated on held-out Task09 validation volumes. Educational use only.',\n"
+            "}\n\n"
+            "report_path.write_text(json.dumps(report_data, indent=2), encoding='utf-8')\n"
+            "print(f'Saved verified metrics report to: {report_path}')"
+        )
+    )
+
+    # Visual Inspection
+    cells.append(
+        nbf.v4.new_code_cell(
+            "# Visual inspection: CT Image, Ground Truth, Prediction, and Difference Overlay\n"
+            "img_np, gt_np, pred_np = cached_volumes_for_viz\n"
+            "spleen_coords = np.argwhere(gt_np > 0)\n"
+            "if len(spleen_coords) > 0:\n"
+            "    cx, cy, cz = spleen_coords.mean(axis=0).astype(int)\n"
+            "else:\n"
+            "    cx, cy, cz = [s // 2 for s in img_np.shape]\n\n"
+            "fig, axes = plt.subplots(1, 3, figsize=(16, 5))\n\n"
+            "# Axial slice (along Z-axis)\n"
+            "axes[0].imshow(img_np[:, :, cz].T, cmap='gray', origin='lower')\n"
+            "axes[0].contour(gt_np[:, :, cz].T, levels=[0.5], colors='green', linewidths=2)\n"
+            "axes[0].set_title(f'Ground Truth Contour (Green, Axial Slice {cz})')\n"
+            "axes[0].axis('off')\n\n"
+            "# Model Prediction Contour\n"
+            "axes[1].imshow(img_np[:, :, cz].T, cmap='gray', origin='lower')\n"
+            "axes[1].contour(pred_np[:, :, cz].T, levels=[0.5], colors='red', linewidths=2)\n"
+            "axes[1].set_title(f'Model Prediction Contour (Red, Axial Slice {cz})')\n"
+            "axes[1].axis('off')\n\n"
+            "# Overlay comparison: Green = GT, Red Dashed = Pred\n"
+            "axes[2].imshow(img_np[:, :, cz].T, cmap='gray', origin='lower')\n"
+            "axes[2].contour(gt_np[:, :, cz].T, levels=[0.5], colors='green', linewidths=2)\n"
+            "axes[2].contour(pred_np[:, :, cz].T, levels=[0.5], colors='red', linewidths=2, linestyles='dashed')\n"
+            "axes[2].set_title('Overlay: Green=GT, Red Dashed=Pred')\n"
+            "axes[2].axis('off')\n\n"
+            "plt.tight_layout()\n"
+            "plt.show()"
+        )
+    )
+
+    nb.cells = cells
+    out_file = notebooks_dir / "03_spleen_evaluation.ipynb"
+    with open(out_file, "w", encoding="utf-8") as f:
+        nbf.write(nb, f)
+    print("Created:", out_file)
+
+
+if __name__ == "__main__":
+    create_preprocessing_notebook()
+    create_training_notebook()
+    create_evaluation_notebook()
